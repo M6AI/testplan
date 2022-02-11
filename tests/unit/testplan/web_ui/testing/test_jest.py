@@ -3,6 +3,7 @@ Runs tests for the UI code.
 """
 import os
 import subprocess
+from typing import Optional
 
 import pytest
 
@@ -14,19 +15,21 @@ TESTPLAN_UI_DIR = os.path.abspath(
 )
 
 
-def is_manager_installed(command: str):
+def check_manager(*commands: str) -> Optional[str]:
     """
-    Checks if package manager is installed.
+    Checks if package manager is installed and returns the first found.
     """
-    with open(os.devnull, "w") as FNULL:
-        try:
-            subprocess.check_call(
-                f"{command} --version", shell=True, stdout=FNULL
-            )
-        except subprocess.CalledProcessError:
-            return False
-        else:
-            return True
+    for command in commands:
+        with open(os.devnull, "w") as FNULL:
+            try:
+                subprocess.check_call(f"{command}", shell=True, stdout=FNULL)
+            except subprocess.CalledProcessError:
+                pass
+            else:
+                return command
+
+
+MANAGER = check_manager('pnpm', 'npm')
 
 
 def tp_ui_installed():
@@ -38,8 +41,8 @@ def tp_ui_installed():
 
 
 @pytest.mark.skipif(
-    not (is_manager_installed("pnpm") and tp_ui_installed()),
-    reason="requires PNPM & testplan UI to be installed.",
+    not (MANAGER and tp_ui_installed()),
+    reason="Requires a NPM/PNPM and UI installation.",
 )
 def test_testplan_ui():
     """
@@ -48,17 +51,17 @@ def test_testplan_ui():
     env = os.environ.copy()
     env["CI"] = "true"
     subprocess.check_call(
-        "pnpm test", shell=True, cwd=TESTPLAN_UI_DIR, env=env
+        f"{MANAGER} test", shell=True, cwd=TESTPLAN_UI_DIR, env=env
     )
 
 
 @skip_on_windows(reason="We run this on linux only")
 @pytest.mark.skipif(
-    not (is_manager_installed("pnpm") and tp_ui_installed()),
-    reason="requires PNPM & testplan UI to be installed.",
+    not (MANAGER and tp_ui_installed()),
+    reason="Requires a NPM/PNPM and UI installation.",
 )
 def test_eslint():
     """
     Runs eslint over the UI source code.
     """
-    subprocess.check_call("pnpm lint", shell=True, cwd=TESTPLAN_UI_DIR)
+    subprocess.check_call(f"{MANAGER} lint", shell=True, cwd=TESTPLAN_UI_DIR)
