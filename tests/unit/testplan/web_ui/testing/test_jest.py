@@ -29,7 +29,7 @@ def check_manager(*commands: str) -> Optional[str]:
                 return command
 
 
-MANAGER = check_manager('pnpm', 'npm')
+MANAGER = check_manager("pnpm", "npm")
 
 
 def tp_ui_installed():
