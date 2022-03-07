@@ -70,12 +70,13 @@ jobs:
     env:
       REACT_APP_API_BASE_URL: "/fake/api/endpoint"
       CI: ""
+      TESTPLAN_REMOTE_HOST: "remote_host"
     strategy:
       matrix:
         python-version: [3.7, 3.8]
 
     services:
-      TESTPLAN_REMOTE_HOST:
+      remote_host:
         image: ubuntu
 
     steps:
