@@ -74,6 +74,10 @@ jobs:
       matrix:
         python-version: [3.7, 3.8]
 
+    services:
+      TESTPLAN_REMOTE_HOST:
+        image: ubuntu
+
     steps:
       - run: echo "BUILD ${{ matrix.python-version }} ${{needs.is_source_changed.outputs.is_source_changed}}"
       - name: Checkout repository
