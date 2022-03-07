@@ -10,10 +10,12 @@ from testplan.common.utils.path import rebase_path
 from testplan.common.utils.remote import filepath_exist_cmd
 
 REMOTE_HOST = os.environ.get("TESTPLAN_REMOTE_HOST")
+print(f"REMOTE HOST is: {REMOTE_HOST}")
 pytestmark = pytest.mark.skipif(
     not REMOTE_HOST,
     reason="Remote host not specified, skip remote resource test",
 )
+
 
 from testplan.common.remote.remote_resource import RemoteResource
 
