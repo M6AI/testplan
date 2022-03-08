@@ -1,17 +1,13 @@
 import os
-import json
 import tempfile
 
 import click
 
-from testplan import defaults
 from testplan.common.utils import logger
-from testplan.common.utils.path import removeemptydir
 from testplan.cli.utils.actions import ProcessResultAction
 from testplan.cli.utils.command_list import CommandList
 from testplan.exporters.testing import JSONExporter, PDFExporter
 from testplan.report import TestReport
-from testplan.report.testing.schemas import TestReportSchema
 from testplan.report.testing.styles import StyleArg
 from testplan.web_ui.server import WebUIServer
 

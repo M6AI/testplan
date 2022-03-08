@@ -64,14 +64,15 @@ jobs:
           ./scripts/utils/crlf_check.sh
           pylint --rcfile pylintrc testplan
 
-  Test:
-    needs: [ lint]
-    runs-on: ubuntu-latest
+  test:
+    needs: [lint]
+    runs-on: ${{ matrix.os }}
     env:
       REACT_APP_API_BASE_URL: "/fake/api/endpoint"
       CI: ""
     strategy:
       matrix:
+        os: [ubuntu-latest]
         python-version: [3.7, 3.8]
 
     steps:
