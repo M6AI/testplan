@@ -90,14 +90,14 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: '14.x'
-      - name: Set up PNPM
+      - name: Build UI
         uses: pnpm/action-setup@v2.1.0
         with:
           version: 6.30.1
+        run: python install-testplan-ui --verbose --dev
       - name: Set up Zookeeper for tests
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          sudo apt-get -y install zookeeper zookeeper-bin zookeeperd
+        run: sudo apt-get -y install zookeeper zookeeper-bin zookeeperd
       - name: Set up Kafka for tests
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
@@ -107,12 +107,16 @@ jobs:
           tar zxf kafka.tgz -C /opt/kafka --strip-components 1
       - name: Install dependencies
         run: pip install -r requirements.txt -U
-      - name: Build UI
-        run: python install-testplan-ui --verbose --dev
-      - name: Test
+      - name: Test Python
+        run: pytest tests --verbose
+      - name: Test UI - Ubuntu
         run: |
-          pytest tests --verbose
           cd testplan/web_ui/testing
           CI=true pnpm lint
           CI=true pnpm test
-          cd -
+      - name: Test UI - Windows
+        shell: cmd
+        run: |
+          cd testplan/web_ui/testing
+          set CI=true && pnpm lint
+          set CI=true && pnpm test
