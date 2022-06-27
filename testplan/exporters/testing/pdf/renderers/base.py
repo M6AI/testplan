@@ -1,10 +1,12 @@
 """
 Base classes for rendering.
 """
-import collections
 import functools
+from collections import OrderedDict
 from html import escape
+from typing import List, Tuple
 
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph
 
 from testplan.common.exporters.pdf import RowData
@@ -19,24 +21,20 @@ class SlicedParagraph:
     not exceed max height (which will trigger ReportLab LayoutError).
 
     :param parts: list of (text, formatter) tuple
-    :type parts: [(``str``, ``str``), ...]
     :param width: width allowed to layout each paragraph
-    :type width: ``int``
     :param height: height allowed to layout each paragraph
-    :type height: ``int``
     :param style: style object for paragraph
-    :type style: ReportLab ParagraphStyle
 
     """
 
     def __init__(
         self,
-        parts,
-        width,
-        height=constants.MAX_CELL_HEIGHT,
-        style=constants.PARAGRAPH_STYLE,
+        parts: List[Tuple[str,str]],
+        width: int,
+        height: int = constants.MAX_CELL_HEIGHT,
+        style: ParagraphStyle = constants.PARAGRAPH_STYLE,
         **kwargs
-    ):
+    ) -> None:
         self.width = width
         self.height = height
 
@@ -69,9 +67,12 @@ class SlicedParagraph:
         return self
 
 
-def format_duration(seconds):
+def format_duration(seconds: float) -> str:
     """
     Format a duration into a human-readable string.
+
+    :param seconds:
+    :return:
     """
     mins, secs = divmod(seconds, 60)
     fmt = "{:.0f}"
@@ -108,7 +109,7 @@ class BaseRowRenderer:
     def get_style(self, source):
         return self.style.passing
 
-    def should_display(self, source):
+    def should_display(self, source) -> bool:
         """Use class attribute by default."""
         return (
             self.always_display
@@ -118,8 +119,7 @@ class BaseRowRenderer:
 
 class MetadataMixin:
     """
-    Utility mixin that has logic for getting
-    metadata context for row renderers.
+    Utility mixin that has logic for getting metadata context for row renderers.
 
     Basically we'd like to selectively render the
     information stored in `meta` dictionary, with readable labels.
@@ -127,16 +127,16 @@ class MetadataMixin:
 
     metadata_labels = ()
 
-    def get_metadata_labels(self):
+    def get_metadata_labels(self) -> Tuple[Tuple[str, str], ...]:
         """Wrapper around class attribute, so we can support inheritance."""
         return self.metadata_labels
 
-    def get_metadata_context(self, source):
+    def get_metadata_context(self, source) -> OrderedDict:
         """
         Return metadata context to be rendered
         on the PDF with readable labels.
         """
-        return collections.OrderedDict(
+        return OrderedDict(
             [
                 (label, source.meta[key])
                 for key, label in self.get_metadata_labels()

@@ -8,6 +8,7 @@ import time
 import traceback
 import uuid
 import warnings
+from typing import Optional
 from urllib.request import pathname2url
 
 from schema import Or
@@ -24,12 +25,13 @@ except Exception as exc:
 
 
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import ExporterConfig
+from testplan.common.exporters import BaseExporterConfig
 from testplan.common.report import Report
+from testplan.report.testing.base import TestReport
 from testplan.common.utils.strings import slugify
 from testplan.report.testing.styles import Style
 from testplan.testing import tagging
-from ..base import Exporter, TagFilteredExporter, TagFilteredExporterConfig
+from ..base import Exporter, TagFilteredExporter, TagFilteredBaseExporterConfig
 
 try:
     from . import renderers
@@ -71,8 +73,19 @@ def generate_path_for_tags(config, tag_dict, filter_type):
     <directory>/report-tags-all-foo__bar__hello-world-mars.pdf
     """
 
-    def add_count_suffix(directory, path, count=0):
-        """Add a number suffix to file name if files with same names exist."""
+    def add_count_suffix(
+        directory: str,
+        path: str,
+        count: int = 0
+    ) -> str:
+        """
+        Add a number suffix to file name if files with same names exist.
+
+        :param directory:
+        :param path:
+        :param count:
+        :return:
+        """
         target_path = "{}_{}".format(path, count) if count else path
         full_path = os.path.join(config.report_dir, target_path + ".pdf")
         if os.path.exists(full_path):
@@ -99,7 +112,7 @@ def generate_path_for_tags(config, tag_dict, filter_type):
     return add_count_suffix(config.report_dir, path)
 
 
-class BasePDFExporterConfig(ExporterConfig):
+class BasePDFBaseExporterConfig(BaseExporterConfig):
     """Config for PDF exporter"""
 
     @classmethod
@@ -110,7 +123,7 @@ class BasePDFExporterConfig(ExporterConfig):
         }
 
 
-class PDFExporterConfig(BasePDFExporterConfig):
+class PDFExporterConfig(BasePDFBaseExporterConfig):
     """
     Configuration object for
     :py:class:`PDFExporter <testplan.exporters.testing.pdf.PDFExporter>`
@@ -123,7 +136,7 @@ class PDFExporterConfig(BasePDFExporterConfig):
 
 
 class TagFilteredPDFExporterConfig(
-    TagFilteredExporterConfig, BasePDFExporterConfig
+    TagFilteredBaseExporterConfig, BasePDFBaseExporterConfig
 ):
     """
     Configuration object for
@@ -152,8 +165,14 @@ class PDFExporter(Exporter):
     def __init__(self, name="PDF exporter", **options):
         super(PDFExporter, self).__init__(name=name, **options)
 
-    def create_pdf(self, source):
-        """Entry point for PDF generation."""
+    def create_pdf(self, source: TestReport) -> str:
+        """
+        Entry point for PDF generation.
+
+        :param source:
+        :return:
+        :raises: Exception thrown during import of dependencies, if any
+        """
         if stored_exc is not None:
             # We cannot generate a PDF if there was an exception importing the
             # dependencies, so raise and abort here.
@@ -225,7 +244,12 @@ class PDFExporter(Exporter):
         template.build(tables)
         return str(pdf_path)
 
-    def export(self, source):
+    def export(self, source: TestReport) -> Optional[str]:
+        """
+
+        :param source:
+        :return:
+        """
         if len(source):
             pdf_path = self.create_pdf(source)
             self.logger.exporter_info("PDF generated at %s", pdf_path)

@@ -1104,3 +1104,9 @@ class RawAssertionRenderer(AssertionRenderer):
                 depth=depth + 1, passed=source["passed"]
             ),
         )
+
+
+@registry.bind(assertions)
+class MarkdownRenderer(AssertionRenderer):
+    def get_detail(self, source, depth, row_idx):
+        return RowData()

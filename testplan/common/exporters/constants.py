@@ -1,4 +1,6 @@
-# PDF displayed tables constants, used for table.log, table.match etc.
+"""
+PDF displayed tables constants, used for table.log, table.match, etc.
+"""
 PAGE_WIDTH = 540
 
 NUM_DISPLAYED_ROWS = 10

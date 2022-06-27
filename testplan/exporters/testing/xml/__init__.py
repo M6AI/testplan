@@ -14,7 +14,7 @@ from lxml.etree import Element
 from lxml.builder import E  # pylint: disable=no-name-in-module
 
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import ExporterConfig
+from testplan.common.exporters import BaseExporterConfig
 from testplan.common.utils.path import unique_name
 from testplan.common.utils.strings import slugify
 from testplan.report import (
@@ -242,7 +242,7 @@ class MultiTestRenderer(BaseRenderer):
         return testcase_reports
 
 
-class XMLExporterConfig(ExporterConfig):
+class XMLBaseExporterConfig(BaseExporterConfig):
     """
     Configuration object for
     :py:class:`<~testplan.exporters.testing.xml.XMLExporter>`.
@@ -261,7 +261,7 @@ class XMLExporter(Exporter):
     :param xml_dir: Directory for saving xml reports.
     """
 
-    CONFIG: XMLExporterConfig = XMLExporterConfig
+    CONFIG: XMLBaseExporterConfig = XMLBaseExporterConfig
 
     renderer_map: Dict[ReportCategories, BaseRenderer] = {
         ReportCategories.MULTITEST: MultiTestRenderer

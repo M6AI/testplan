@@ -1,16 +1,17 @@
 """
-HTTP exporter for uploading test reports via HTTP transmission. The web server
-must be able to handle POST request and receive data in JSON format.
+HTTP exporter for uploading test reports via HTTP transmission. The web
+ server must be able to handle POST request and receive data in JSON
+ format.
 """
 
 import json
-from typing import Any, Tuple, Union
-
 import requests
+from typing import Any, Dict, Tuple, Union
+
 from schema import Or, And, Use
 
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import ExporterConfig
+from testplan.common.exporters import BaseExporterConfig
 from testplan.common.utils.validation import is_valid_url
 from testplan.report.testing.schemas import TestReportSchema
 from ..base import Exporter
@@ -23,7 +24,7 @@ class CustomJsonEncoder(json.JSONEncoder):
         return str(obj)
 
 
-class HTTPExporterConfig(ExporterConfig):
+class HTTPBaseExporterConfig(BaseExporterConfig):
     """
     Configuration object for
     :py:class:`HTTPExporter <testplan.exporters.testing.http.HTTPExporter>`
@@ -31,7 +32,7 @@ class HTTPExporterConfig(ExporterConfig):
     """
 
     @classmethod
-    def get_options(cls):
+    def get_options(cls) -> Dict:
         return {
             ConfigOption("http_url"): is_valid_url,
             ConfigOption("timeout", default=60): Or(
@@ -52,9 +53,9 @@ class HTTPExporter(Exporter):
     Inherits all :py:class:`~testplan.exporters.testing.base.Exporter` options.
     """
 
-    CONFIG = HTTPExporterConfig
+    CONFIG = HTTPBaseExporterConfig
 
-    def __init__(self, name: str = "HTTP exporter", **options):
+    def __init__(self, name: str = "HTTP exporter", **options) -> None:
         super(HTTPExporter, self).__init__(name=name, **options)
 
     def _upload_report(
@@ -64,7 +65,7 @@ class HTTPExporter(Exporter):
         Upload Json data, then return the response from server with an
         error message (if any).
 
-        :param url:
+        :param url: URL for the POST request
         :param data:
         :return: response, even if None, and error message pair
         :raises HTTPError: thrown if response results in HTTP error
@@ -93,7 +94,11 @@ class HTTPExporter(Exporter):
         return response, errmsg
 
     def export(self, source) -> Union[None, str]:
-        """TODO"""
+        """
+
+        :param source:
+        :return:
+        """
         http_url = self.cfg.http_url
         test_plan_schema = TestReportSchema()
         data = test_plan_schema.dump(source)

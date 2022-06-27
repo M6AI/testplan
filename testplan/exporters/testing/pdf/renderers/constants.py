@@ -1,4 +1,6 @@
-""" TODO """
+"""
+
+"""
 from reportlab.lib.pagesizes import A3
 from reportlab.lib.units import cm
 from reportlab.lib import colors

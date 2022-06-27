@@ -3,6 +3,7 @@
 """
 
 import itertools
+from typing import List, Generator, Tuple, Iterable, Dict, Union
 
 from reportlab.platypus import Table
 from reportlab.lib import colors
@@ -14,424 +15,6 @@ from testplan.common.exporters import constants
 # If you increase this too much Reportlab starts having
 # performance issues and takes exponentially longer to render the PDF
 MAX_TABLE_ROWS = 1000
-
-
-def _partition_data(data, max_rows):
-    """
-    Partition a table's data, each partition
-    containing at most ``max_rows`` rows.
-
-    :param data: the table data
-    :type data: ``list`` of ``list``
-    :param max_rows: the maximum number of rows in each partition
-    :type max_rows: ``int``
-    :return: a generator yielding each new partition
-    :rtype: ``generator``
-    """
-    return (
-        data[row : row + max_rows] for row in range(0, len(data), max_rows)
-    )
-
-
-def _partition_style(style, num_rows, max_rows):
-    """
-    Partition a table's style commands.
-
-    :param style: the style commands
-    :type style: ``list`` of ``tuple``
-    :param num_rows: the number of rows in the table
-    :type num_rows: ``int``
-    :param max_rows: the maximum number of rows in each partition
-    :type max_rows: ``int``
-    :return: a generator yielding a list of style commands
-            applicable for each new partition
-    :rtype: ``generator``
-    """
-    for offset in range(0, num_rows, max_rows):
-        end_row = min(offset + max_rows, num_rows) - 1
-        partition = []
-
-        for command in style:
-            start = command[1][1]
-            end = command[2][1]
-
-            command_start = num_rows + start if start < 0 else start
-            command_end = num_rows + end if end < 0 else end
-            command_rows = end_row - offset
-
-            if command_end < offset or command_start > end_row:
-                # Not applicable at all
-                continue
-
-            partition_start = (
-                0 if command_start < offset else command_start - offset
-            )
-
-            partition_end = (
-                command_rows if command_end > end_row else command_end - offset
-            )
-
-            # Replace the old row indices with new ones,
-            # but keep the rest of the tuple the same
-            partition.append(
-                (
-                    command[0],
-                    (command[1][0], partition_start),
-                    (command[2][0], partition_end),
-                )
-                + command[3:]
-            )
-
-        yield partition
-
-
-def create_base_tables(data, style, col_widths, max_rows=MAX_TABLE_ROWS):
-    """
-    Create tables for the specified data and style
-    commands, partitioning where necessary.
-
-    :param data: the table data
-    :type data: ``list`` of ``list``
-    :param style: the style commands
-    :type style: ``list`` of ``tuple``
-    :param col_widths: column widths for the new tables
-    :type col_widths: ``iterable``
-    :param max_rows: the maximum number of rows in each table
-    :type max_rows: ``int``
-    :return: a list of new tables
-    :rtype: ``list`` of ``Table``
-    """
-    zipped = zip(
-        _partition_data(data, max_rows=max_rows),
-        _partition_style(style, len(data), max_rows=max_rows),
-    )
-
-    return [
-        Table(data=_data, colWidths=col_widths, style=_style)
-        for _data, _style in zipped
-    ]
-
-
-def format_cell_data(data, limit):
-    """
-    Change the str representation of values in data if they represent regex or
-    lambda functions. Also limit the length of these strings.
-
-    :param data: List of values to be formatted.
-    :type data: ``list``
-    :param limit: The number of characters allowed in each string.
-    :type limit: ``int``
-    :return: List of formatted and limited strings.
-    :rtype: ``list``
-    """
-    for i, value in enumerate(data):
-        if is_regex(value):
-            data[i] = "REGEX('{}')".format(value.pattern)
-        elif "lambda" in str(value):
-            data[i] = "<lambda>"
-
-    return _limit_cell_length(data, limit)
-
-
-def _limit_cell_length(iterable, limit):
-    """
-    Limit the length of each string in the iterable.
-
-    :param iterable: iterable object containing string values.
-    :type iterable: ``list`` or ``tuple`` etc.
-    :param limit: The number of characters allowed in each string
-    :type limit: ``int``
-    :return: The list of limited strings.
-    :rtype: ``list`` of ``str``
-    """
-    return [
-        val if len(str(val)) < limit else "{}...".format(str(val)[: limit - 3])
-        for val in iterable
-    ]
-
-
-def _add_row_index(columns, rows, indices):
-    """
-    Add row indices as the first column to the columns and rows data.
-
-    :param columns: List of the column names, maintains the display order.
-    :type columns: ``list`` of ``str``
-    :param rows: List of lists containing row data.
-    :type rows: ``list`` of ``list``
-    :param indices: List of row indices for each row in the table.
-    :type indices: ``list`` of ``int``
-    :return:
-    """
-    indexed_columns = ["row"] + columns
-    indexed_rows = []
-    for i, row in enumerate(rows):
-        indexed_rows.append([indices[i]] + row)
-
-    return indexed_columns, indexed_rows
-
-
-def _create_cell_styles(colour_matrix, display_index):
-    """
-    Create a list of cell styles indicating whether the cell should be black,
-    green or red based on whether the cell result is ignored (I), passed (P) or
-    failed (F) respectively. This information is stored in the colour matrix.
-
-    NOTE: This function expects the colour_matrix to be information on the row
-    cells only, hence adding 1 to every row index to avoid the column names.
-    Column cell formatting is general to every table and can be taken care of
-    elsewhere.
-
-    :param colour_matrix: A matrix listing whether each cell has passed (P),
-                          failed (F) or ignored (I) which will result in the
-                          cell text being green, red or black respectively. If
-                          no matrix is passed all cells will be black.
-    :type colour_matrix: ``list`` of ``list``
-    :param display_index: Will the row indices be displayed, if so each column
-                          index must be increased by 1.
-    :type display_index: ``bool``
-    :return: List of RowStyle objects indicating the colour of each cell.
-    :rtype: ``list`` of ``testplan.common.exporters.pdf.RowStyle``
-    """
-    cell_styles = []
-    for row_idx in range(len(colour_matrix)):
-        for col_idx in range(len(colour_matrix[row_idx])):
-            if colour_matrix[row_idx][col_idx] == "I":
-                colour = colors.black
-            elif colour_matrix[row_idx][col_idx] == "P":
-                colour = colors.green
-            elif colour_matrix[row_idx][col_idx] == "F":
-                colour = colors.red
-            col = col_idx + int(display_index)
-            cell_styles.append(
-                RowStyle(
-                    start_column=col,
-                    end_column=col,
-                    start_row=row_idx + 1,
-                    end_row=row_idx + 1,
-                    textcolor=colour,
-                )
-            )
-    return cell_styles
-
-
-def _create_sub_table(
-    columns,
-    rows,
-    column_start,
-    column_end,
-    style,
-    row_indices=None,
-    colour_matrix=None,
-):
-    """
-    Create ReportLab table from a subsection of the columns and rows data using
-    the column_start and column_end indices. Row indices may be added to the
-    sub table if provided.
-
-    :param columns: List of the column names, maintains the display order.
-    :type columns: ``list`` of ``str``
-    :param rows: List of lists containing row data.
-    :type rows: ``list`` of ``list``
-    :param column_start: The index of the first column to be included.
-    :type column_start: ``int``
-    :param column_end: The index of the last column to be included.
-    :type column_end: ``int``
-    :param style: The style of the ReportLab table.
-    :type style: ``list`` of ``tuple``
-    :param row_indices: List of row indices for each row in the table.
-    :type row_indices: ``list`` of ``int``
-    :param colour_matrix: A matrix listing whether each cell has passed (P),
-                          failed (F) or ignored (I) which will result in the
-                          cell text being green, red or black respectively. If
-                          no matrix is passed all cells will be black.
-    :type colour_matrix: ``list`` of ``list``
-    :return: The formatted ReportLab table.
-    :rtype: ``list``
-    """
-    # Select subsection of columns and rows.
-    sub_columns = columns[column_start:column_end]
-    sub_rows = [row[column_start:column_end] for row in rows]
-
-    # If needed add row indices.
-    if row_indices:
-        sub_columns, sub_rows = _add_row_index(
-            columns=sub_columns, rows=sub_rows, indices=row_indices
-        )
-
-    # Create the table and set it's style.
-    table = Table([sub_columns] + sub_rows)
-
-    if colour_matrix:
-        colour_matrix = [row[column_start:column_end] for row in colour_matrix]
-        cell_styles = _create_cell_styles(
-            colour_matrix=colour_matrix, display_index=bool(row_indices)
-        )
-        table.setStyle(style + format_table_style(cell_styles))
-    else:
-        table.setStyle(style)
-
-    return table
-
-
-def create_table(
-    table,
-    columns,
-    row_indices,
-    display_index,
-    max_width,
-    style,
-    colour_matrix=None,
-):
-    """
-    Create a ReportLab table from a serialized entry. Table features are:
-
-      * Cell values (rows and columns) cannot exceed the maximum number of
-        characters (constanst.CELL_STRING_LENGTH). Values will stop before this
-        maximum and be appended with '...'.
-      * If the number of rows exceeds the maximum (constants.NUM_DISPLAYED_ROWS)
-        show the first half of the allowed rows, then a row of '...', then the
-        last half of the allowed rows. Also set the display_index parameter
-        to True.
-      * If the table is too wide to fit onto the page, split the tables columns
-        into multiple rows. Also set the display_index parameter to True.
-
-    :param table: The table containing all the data.
-    :type table: ``list`` of ``dict``
-    :param columns: List of the column names, maintains the display order.
-    :type columns: ``list`` of ``str``
-    :param row_indices: List of row indices for each row in the table.
-    :type row_indices: ``list`` of ``int``
-    :param display_index: If True display the row indices. This will
-        automatically be set to True if the rows exceed the maximum
-        allowed to display or the table is too wide (too many columns)
-        to fit in a single table.
-    :type display_index: ``bool``
-    :param max_width: The maximum allowed width the table can be.
-    :type max_width: ``int``
-    :param style: The style of the ReportLab table.
-    :type style: ``list`` of ``tuple``
-    :param colour_matrix: A matrix listing whether each cell has passed (P),
-        failed (F) or ignored (I) which will result in the cell text being
-        green, red or black respectively. If no matrix is passed all cells
-        will be black.
-    :type colour_matrix: ``list`` of ``list``
-    :return: The formatted ReportLab table.
-    :rtype: ``list``
-    """
-    num_rows = len(table)
-    num_cols = len(columns)
-    display_columns = _limit_cell_length(columns, constants.CELL_STRING_LENGTH)
-
-    # Limit the number of rows shown to X. If it goes past this show the
-    # first X/2 rows, then a '...' row, then the last X/2 rows.
-    if num_rows > constants.NUM_DISPLAYED_ROWS:
-        display_index = True
-        half_num_displayed_rows = int(constants.NUM_DISPLAYED_ROWS / 2)
-        row_indices = (
-            row_indices[:half_num_displayed_rows]
-            + ["..."]
-            + row_indices[-half_num_displayed_rows:]
-        )
-        table = (
-            table[:half_num_displayed_rows]
-            + [{col: "..." for col in columns}]
-            + table[-half_num_displayed_rows:]
-        )
-        if colour_matrix:
-            colour_matrix = (
-                colour_matrix[:half_num_displayed_rows]
-                + [["I"] * num_cols]
-                + colour_matrix[-half_num_displayed_rows:]
-            )
-        num_rows = len(table)
-
-    # Limit the values in each row to the constants.CELL_STRING_LENGTH number of
-    # characters and add the '...' row if the maximum number of rows has been
-    # exceeded.
-    rows = [
-        _limit_cell_length(
-            iterable=table[i],
-            limit=constants.CELL_STRING_LENGTH,
-        )
-        for i in range(num_rows)
-    ]
-
-    # Test if the table is too wide to fit on the page and must be split. If so
-    # show the row indices.
-    temp_table = _create_sub_table(
-        columns=display_columns,
-        rows=rows,
-        column_start=0,
-        column_end=num_cols,
-        style=style,
-    )
-    if temp_table.minWidth() > max_width:
-        display_index = True
-
-    tables = []
-    column_start = 0
-    column_end = 1
-    while column_end <= num_cols:
-        # Create a table, incrementally increasing the number of columns. Show
-        # the row indices if needed.
-        if display_index:
-            table = _create_sub_table(
-                columns=display_columns,
-                rows=rows,
-                column_start=column_start,
-                column_end=column_end,
-                style=style,
-                row_indices=row_indices,
-                colour_matrix=colour_matrix,
-            )
-        else:
-            table = _create_sub_table(
-                columns=display_columns,
-                rows=rows,
-                column_start=column_start,
-                column_end=column_end,
-                style=style,
-                colour_matrix=colour_matrix,
-            )
-        # If the table exceeds the max width of the page, add a table up to the
-        # previous column.
-        if table.minWidth() > max_width:
-            table = _create_sub_table(
-                columns=display_columns,
-                rows=rows,
-                column_start=column_start,
-                column_end=column_end - 1,
-                style=style,
-                row_indices=row_indices,
-                colour_matrix=colour_matrix,
-            )
-            tables.append([table, "", "", ""])
-            column_start = column_end - 1
-        # If we have hit the last column in the table add it to be displayed.
-        elif column_end == num_cols:
-            tables.append([table, "", "", ""])
-            column_end += 1
-        # Otherwise increment the number of columns to include.
-        else:
-            column_end += 1
-
-    return tables
-
-
-def format_table_style(table_styles):
-    """
-    Convert table style into a format ReportLab will accept.
-
-    :param table_styles: List of RowStyle objects defining the style of the
-                         ReportLab table.
-    :type table_styles: ``list`` of ``testplan.common.exporters.pdf.RowStyle``
-    :return: List of styles formatted into tuples.
-    :rtype: ``list`` of ``tuple``
-    """
-    table_style = []
-    for style in table_styles:
-        table_style.extend(style.get_commands())
-    return table_style
 
 
 class RowStyle:
@@ -764,3 +347,401 @@ class RowData:
 
         # This changes `self.end`, so needs to happen last
         self.content.extend(content)
+
+
+def _partition_data(data: List[List], max_rows: int) -> Generator:
+    """
+    Partitions a table's data, each part containing at most ``max_rows`` rows.
+
+    :param data: the table data
+    :param max_rows: the maximum number of rows in each partition
+    :return: a generator of partitions
+    """
+    return (
+        data[row : row + max_rows] for row in range(0, len(data), max_rows)
+    )
+
+
+def _partition_style(
+    style: List[Tuple],
+    num_rows: int,
+    max_rows: int
+) -> Generator:
+    """
+    Partitions a table's style commands.
+
+    :param style: the style commands
+    :param num_rows: the number of rows in the table
+    :param max_rows: the maximum number of rows in each partition
+    :return: a generator of list of style commands applicable too partitions
+    :rtype: ``generator``
+    """
+    for offset in range(0, num_rows, max_rows):
+        end_row = min(offset + max_rows, num_rows) - 1
+        partition = []
+
+        for command in style:
+            start = command[1][1]
+            end = command[2][1]
+
+            command_start = num_rows + start if start < 0 else start
+            command_end = num_rows + end if end < 0 else end
+            command_rows = end_row - offset
+
+            if command_end < offset or command_start > end_row:
+                # Not applicable at all
+                continue
+
+            partition_start = (
+                0 if command_start < offset else command_start - offset
+            )
+
+            partition_end = (
+                command_rows if command_end > end_row else command_end - offset
+            )
+
+            # Replace the old row indices with new ones,
+            # but keep the rest of the tuple the same
+            partition.append(
+                (
+                    command[0],
+                    (command[1][0], partition_start),
+                    (command[2][0], partition_end),
+                )
+                + command[3:]
+            )
+
+        yield partition
+
+
+def create_base_tables(
+    data: List[List],
+    style: List[Tuple],
+    col_widths: Iterable,
+    max_rows: int = MAX_TABLE_ROWS
+) -> List[Table]:
+    """
+    Creates tables for the specified data and style
+    commands, partitioning where necessary.
+
+    :param data: the table data
+    :param style: the style commands
+    :param col_widths: column widths for the new tables
+    :param max_rows: the maximum number of rows in each table
+    :return: a list of new tables
+    """
+    zipped = zip(
+        _partition_data(data, max_rows=max_rows),
+        _partition_style(style, len(data), max_rows=max_rows),
+    )
+
+    return [
+        Table(data=_data, colWidths=col_widths, style=_style)
+        for _data, _style in zipped
+    ]
+
+
+def format_cell_data(data: List, limit: int) -> List[str]:
+    """
+    Change the str representation of values in data if they represent regex or
+    lambda functions. Also limit the length of these strings.
+
+    :param data: List of values to be formatted.
+    :param limit: The number of characters allowed in each string.
+    :return: List of formatted and limited strings.
+    """
+    for i, value in enumerate(data):
+        if is_regex(value):
+            data[i] = "REGEX('{}')".format(value.pattern)
+        elif "lambda" in str(value):
+            data[i] = "<lambda>"
+
+    return _limit_cell_length(data, limit)
+
+
+def _limit_cell_length(iterable: Iterable[str], limit: int) -> List[str]:
+    """
+    Limit the length of each string in the iterable.
+
+    :param iterable: iterable object containing string values
+    :param limit: The number of characters allowed in each string
+    :return: The list of limited strings
+    """
+    return [
+        val if len(str(val)) < limit else "{}...".format(str(val)[: limit - 3])
+        for val in iterable
+    ]
+
+
+def _add_row_index(
+    columns: List[str],
+    rows: List[List],
+    indices: List[int],
+) -> Tuple[List[str], List[List]]:
+    """
+    Add row indices as the first column to the columns and rows data.
+
+    :param columns: List of the column names, maintains the display order.
+    :param rows: List of lists containing row data.
+    :param indices: List of row indices for each row in the table.
+    :return: the pair of lists of indexed columns and indexed rows
+    """
+    indexed_columns = ["row"] + columns
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        indexed_rows.append([indices[i]] + row)
+
+    return indexed_columns, indexed_rows
+
+
+def _create_cell_styles(
+    colour_matrix: List[List[str]],
+    display_index: bool
+) -> List[RowStyle]:
+    """
+    Create a list of cell styles indicating whether the cell should be black,
+    green or red based on whether the cell result is ignored (I), passed (P) or
+    failed (F) respectively. This information is stored in the colour matrix.
+
+    :param colour_matrix: A matrix listing whether each cell has passed (P),
+                          failed (F) or ignored (I) which will result in the
+                          cell text being green, red or black respectively. If
+                          no matrix is passed all cells will be black.
+    :param display_index: Will the row indices be displayed, if so each column
+                          index must be increased by 1.
+    :return: List of RowStyle objects indicating the colour of each cell.
+    """
+    cell_styles = []
+    for row_idx in range(len(colour_matrix)):
+        for col_idx in range(len(colour_matrix[row_idx])):
+            if colour_matrix[row_idx][col_idx] == "I":
+                colour = colors.black
+            elif colour_matrix[row_idx][col_idx] == "P":
+                colour = colors.green
+            elif colour_matrix[row_idx][col_idx] == "F":
+                colour = colors.red
+            else:
+                raise ValueError(
+                    "Expected letter 'I', 'P', or 'F', received {}".format(
+                        colour_matrix[row_idx][col_idx]
+                    )
+                )
+
+    # NOTE: This function expects the colour_matrix to be information on the
+    #            row cells only, hence adding 1 to every row index to avoid the
+    #            column names.
+    #            Column cell formatting is general to every table and can be taken
+    #            care of elsewhere.
+            col = col_idx + int(display_index)
+            cell_styles.append(
+                RowStyle(
+                    start_column=col,
+                    end_column=col,
+                    start_row=row_idx + 1,
+                    end_row=row_idx + 1,
+                    textcolor=colour,
+                )
+            )
+    return cell_styles
+
+
+def _create_sub_table(
+    columns: List[str],
+    rows: List[List],
+    column_start: int,
+    column_end: int,
+    style: List[Tuple],
+    row_indices: List[int] = None,
+    colour_matrix: List[List[str]] = None,
+) -> Table:
+    """
+    Creates ReportLab table from a subsection of the columns and rows data using
+    the column_start and column_end indices. Row indices may be added to the
+    sub table if provided.
+
+    :param columns: List of the column names, maintains the display order.
+    :param rows: List of lists containing row data.
+    :param column_start: The index of the first column to be included.
+    :param column_end: The index of the last column to be included.
+    :param style: The style of the ReportLab table.
+    :param row_indices: List of row indices for each row in the table.
+    :param colour_matrix: A matrix listing whether each cell has passed (P),
+                          failed (F) or ignored (I) which will result in the
+                          cell text being green, red or black respectively. If
+                          no matrix is passed all cells will be black.
+    :return: The formatted ReportLab table.
+    """
+    # Select subsection of columns and rows.
+    sub_columns = columns[column_start:column_end]
+    sub_rows = [row[column_start:column_end] for row in rows]
+
+    # If needed add row indices.
+    if row_indices:
+        sub_columns, sub_rows = _add_row_index(
+            columns=sub_columns, rows=sub_rows, indices=row_indices
+        )
+
+    # Create the table and set it's style.
+    table = Table([sub_columns] + sub_rows)
+
+    if colour_matrix:
+        colour_matrix = [row[column_start:column_end] for row in colour_matrix]
+        cell_styles = _create_cell_styles(
+            colour_matrix=colour_matrix, display_index=bool(row_indices)
+        )
+        table.setStyle(style + format_table_style(cell_styles))
+    else:
+        table.setStyle(style)
+
+    return table
+
+
+def create_table(
+    table: List[Dict],
+    columns: List[str],
+    row_indices: List[int],
+    display_index: bool,
+    max_width: int,
+    style: List[Tuple],
+    colour_matrix: List[List[str]] = None,
+) -> List[Union[Table, str]]:
+    """
+    Create a ReportLab table from a serialized entry. Table features are:
+
+      * Cell values (rows and columns) cannot exceed the maximum number of
+        characters (constanst.CELL_STRING_LENGTH). Values will stop before this
+        maximum and be appended with '...'.
+      * If the number of rows exceeds the maximum (constants.NUM_DISPLAYED_ROWS)
+        show the first half of the allowed rows, then a row of '...', then the
+        last half of the allowed rows. Also set the display_index parameter
+        to True.
+      * If the table is too wide to fit onto the page, split the tables columns
+        into multiple rows. Also set the display_index parameter to True.
+
+    :param table: The table containing all the data.
+    :param columns: List of the column names, maintains the display order.
+    :param row_indices: List of row indices for each row in the table.
+    :param display_index: If True display the row indices. This will
+        automatically be set to True if the rows exceed the maximum
+        allowed to display or the table is too wide (too many columns)
+        to fit in a single table.
+    :param max_width: The maximum allowed width the table can be.
+    :param style: The style of the ReportLab table.
+    :param colour_matrix: A matrix listing whether each cell has passed (P),
+        failed (F) or ignored (I) which will result in the cell text being
+        green, red or black respectively. If no matrix is passed all cells
+        will be black.
+    :return: The formatted ReportLab table.
+    """
+    num_rows = len(table)
+    num_cols = len(columns)
+    display_columns = _limit_cell_length(columns, constants.CELL_STRING_LENGTH)
+
+    # Limit the number of rows shown to X. If it goes past this show the
+    # first X/2 rows, then a '...' row, then the last X/2 rows.
+    if num_rows > constants.NUM_DISPLAYED_ROWS:
+        display_index = True
+        half_num_displayed_rows = int(constants.NUM_DISPLAYED_ROWS / 2)
+        row_indices = (
+            row_indices[:half_num_displayed_rows]
+            + ["..."]
+            + row_indices[-half_num_displayed_rows:]
+        )
+        table = (
+            table[:half_num_displayed_rows]
+            + [{col: "..." for col in columns}]
+            + table[-half_num_displayed_rows:]
+        )
+        if colour_matrix:
+            colour_matrix = (
+                colour_matrix[:half_num_displayed_rows]
+                + [["I"] * num_cols]
+                + colour_matrix[-half_num_displayed_rows:]
+            )
+        num_rows = len(table)
+
+    # Limit the values in each row to the constants.CELL_STRING_LENGTH number of
+    # characters and add the '...' row if the maximum number of rows has been
+    # exceeded.
+    rows = [
+        _limit_cell_length(
+            iterable=table[i],
+            limit=constants.CELL_STRING_LENGTH,
+        )
+        for i in range(num_rows)
+    ]
+
+    # Test if the table is too wide to fit on the page and must be split. If so
+    # show the row indices.
+    temp_table = _create_sub_table(
+        columns=display_columns,
+        rows=rows,
+        column_start=0,
+        column_end=num_cols,
+        style=style,
+    )
+    if temp_table.minWidth() > max_width:
+        display_index = True
+
+    tables = []
+    column_start = 0
+    column_end = 1
+    while column_end <= num_cols:
+        # Create a table, incrementally increasing the number of columns. Show
+        # the row indices if needed.
+        if display_index:
+            table = _create_sub_table(
+                columns=display_columns,
+                rows=rows,
+                column_start=column_start,
+                column_end=column_end,
+                style=style,
+                row_indices=row_indices,
+                colour_matrix=colour_matrix,
+            )
+        else:
+            table = _create_sub_table(
+                columns=display_columns,
+                rows=rows,
+                column_start=column_start,
+                column_end=column_end,
+                style=style,
+                colour_matrix=colour_matrix,
+            )
+        # If the table exceeds the max width of the page, add a table up to the
+        # previous column.
+        if table.minWidth() > max_width:
+            table = _create_sub_table(
+                columns=display_columns,
+                rows=rows,
+                column_start=column_start,
+                column_end=column_end - 1,
+                style=style,
+                row_indices=row_indices,
+                colour_matrix=colour_matrix,
+            )
+            tables.append([table, "", "", ""])
+            column_start = column_end - 1
+        # If we have hit the last column in the table add it to be displayed.
+        elif column_end == num_cols:
+            tables.append([table, "", "", ""])
+            column_end += 1
+        # Otherwise increment the number of columns to include.
+        else:
+            column_end += 1
+
+    return tables
+
+
+def format_table_style(table_styles: List[RowStyle]) -> List[Tuple]:
+    """
+    Convert table style into a format ReportLab will accept.
+
+    :param table_styles: List of RowStyle objects defining the style of the
+                         ReportLab table.
+    :return: List of styles formatted into tuples.
+    """
+    table_style = []
+    for style in table_styles:
+        table_style.extend(style.get_commands())
+    return table_style

@@ -2,6 +2,8 @@
 PDF Renderer classes for test report objects.
 """
 import logging
+from collections import OrderedDict
+from typing import Optional, Tuple
 
 from reportlab.lib import colors
 
@@ -15,6 +17,7 @@ from testplan.report import (
     TestCaseReport,
     ReportCategories,
 )
+from testplan.report.testing.styles import StyleFlag
 from testplan.testing import tagging
 from . import constants as const
 from .base import format_duration, RowData, BaseRowRenderer, MetadataMixin
@@ -34,7 +37,7 @@ class ReportRendererRegistry(Registry):
 registry = ReportRendererRegistry()
 
 
-def format_status(report_status):
+def format_status(report_status: str) -> str:
     """
     For readability purposes, both failed and
     erroneous tests will be displayed as failed.
@@ -62,7 +65,7 @@ class TestReportRenderer(BaseRowRenderer, MetadataMixin):
         ("report_tags_any", "Report tags (any)"),
     )
 
-    def get_metadata_context(self, source):
+    def get_metadata_context(self, source: TestReport) -> OrderedDict:
         """
         Enriched meta context with test counts, run times etc.
         """
@@ -93,8 +96,20 @@ class TestReportRenderer(BaseRowRenderer, MetadataMixin):
             )
         return ctx
 
-    def get_row_data(self, source, depth, row_idx):
-        """Render Testplan header & metadata"""
+    def get_row_data(
+        self,
+        source: TestReport,
+        depth: int,
+        row_idx: int,
+    ) -> RowData:
+        """
+        Render Testplan header & metadata
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :return:
+        """
         row_data = RowData(
             start=row_idx,
             content=[source.name, "", "", format_status(source.status)],
@@ -144,10 +159,22 @@ class TestReportRenderer(BaseRowRenderer, MetadataMixin):
 
         return row_data
 
-    def get_logs(self, source, depth, row_idx, lvl=logging.ERROR):
+    def get_logs(
+        self,
+        source: TestReport,
+        depth: int,
+        row_idx: int,
+        lvl: int = logging.ERROR
+    ) -> RowData:
         """
         Get logs created by the `report.logger` object.
         Only select the logs with severity level equal to or higher than `lvl`.
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :param lvl:
+        :return:
         """
         font_size = const.FONT_SIZE_SMALL
         width = const.WRAP_LIMITS[font_size]
@@ -175,9 +202,19 @@ class TestReportRenderer(BaseRowRenderer, MetadataMixin):
 class TestRowRenderer(BaseRowRenderer, MetadataMixin):
     """Common logic for rendering test report objects."""
 
-    def get_row_data(self, source, depth, row_idx):
+    def get_row_data(
+        self,
+        source: TestGroupReport,
+        depth: int,
+        row_idx: int,
+    ) -> RowData:
         """
         Display test name/description, passed status & logs (if enabled).
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :return:
         """
         row_data = self.get_header(source, depth, row_idx)
 
@@ -195,15 +232,25 @@ class TestRowRenderer(BaseRowRenderer, MetadataMixin):
 
         return row_data
 
-    def get_header_linestyle(self):
+    def get_header_linestyle(self) -> Tuple[int, colors.Color]:
         """Styling for the line below test header."""
         return 1, colors.lightgrey
 
-    def get_header(self, source, depth, row_idx):
+    def get_header(
+        self,
+        source: TestGroupReport,
+        depth: int,
+        row_idx: int,
+    ) -> RowData:
         """
         Assuming we have 4 columns per row, render the header in the format:
 
         [<TEST_NAME> - <NATIVE TAGS>][][][<TEST_STATUS>]
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :return:
         """
         passed = source.passed
         font_size = const.FONT_SIZE if depth == 0 else const.FONT_SIZE_SMALL
@@ -241,10 +288,18 @@ class TestRowRenderer(BaseRowRenderer, MetadataMixin):
             style=styles,
         )
 
-    def get_description(self, description, depth, row_idx):
+    def get_description(
+        self,
+        description: str,
+        depth: int,
+        row_idx: int,
+    ) -> RowData:
         """
-        Description for a test object,
-        this will generally be docstring text.
+        Description for a test object, this will generally be docstring text.
+
+        :param description:
+        :param depth:
+        :param row_idx:
         """
         return RowData(
             start=row_idx,
@@ -262,10 +317,22 @@ class TestRowRenderer(BaseRowRenderer, MetadataMixin):
             ),
         )
 
-    def get_logs(self, source, depth, row_idx, lvl=logging.ERROR):
+    def get_logs(
+        self,
+        source: TestGroupReport,
+        depth: int,
+        row_idx: int,
+        lvl: int = logging.ERROR
+    ) -> Optional[RowData]:
         """
         Get logs created by the `report.logger` object.
         Only select the logs with severity level equal to or higher than `lvl`.
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :param lvl:
+        :return:
         """
         font_size = const.FONT_SIZE_SMALL
         width = const.WRAP_LIMITS[font_size]
@@ -288,14 +355,22 @@ class TestRowRenderer(BaseRowRenderer, MetadataMixin):
             else None
         )
 
-    def get_style(self, source):
+    def get_style(self, source: TestGroupReport) -> StyleFlag:
+        """
+
+        :param source:
+        :return:
+        """
         if source.passed:
             return self.style.passing
         return self.style.failing
 
-    def should_display(self, source):
+    def should_display(self, source: TestGroupReport) -> True:
         """
         Filter out passing rows if `failing_tests` is `True`.
+
+        :param source:
+        :return:
         """
         style = self.get_style(source)
         if source.category == ReportCategories.TESTSUITE:
@@ -312,14 +387,15 @@ class TestCaseRowBuilder(TestRowRenderer):
     to a testcase method / function.
     """
 
-    def get_header_linestyle(self):
+    # property?
+    def get_header_linestyle(self) -> Tuple[int, colors.Color]:
         """
         Testcase line separators are a little bit
         thinner, as there are many testcases per test run.
         """
         return 0.5, colors.lightgrey
 
-    def should_display(self, source):
+    def should_display(self, source: TestGroupReport) -> bool:
         return self.get_style(source).display_testcase
 
 
@@ -327,15 +403,27 @@ class TestCaseRowBuilder(TestRowRenderer):
 class MultiTestRowBuilder(TestRowRenderer):
     """Multitests get special treatment with extra formatting & summary."""
 
-    def get_header_linestyle(self):
+    def get_header_linestyle(self) -> Tuple[int, colors.Color]:
         """
         More distinctive line separator for Multitests,
         as they are high level test containers.
         """
         return 1, colors.black
 
-    def get_header(self, source, depth, row_idx):
-        """Display short summary & run times along with pass/fail status."""
+    def get_header(
+        self,
+        source: TestGroupReport,
+        depth: int,
+        row_idx: int,
+    ) -> RowData:
+        """
+        Display short summary & run times along with pass/fail status.
+
+        :param source:
+        :param depth:
+        :param row_idx:
+        :return:
+        """
         row_data = RowData(
             start=row_idx,
             content=const.EMPTY_ROW,

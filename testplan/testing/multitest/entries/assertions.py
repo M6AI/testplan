@@ -1399,3 +1399,7 @@ class FixMatchAll(DictMatchAll):
             category=category,
             value_cmp_func=value_cmp_func,
         )
+
+
+class Markdown():
+    pass

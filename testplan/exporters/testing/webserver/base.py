@@ -5,7 +5,7 @@ which can display the test result.
 
 from testplan import defaults
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import ExporterConfig
+from testplan.common.exporters import BaseExporterConfig
 from testplan.report.testing.base import TestReport
 from testplan.web_ui.server import WebUIServer
 
@@ -13,7 +13,7 @@ from ..base import Exporter
 from ..json import JSONExporter
 
 
-class WebServerExporterConfig(ExporterConfig):
+class WebServerBaseExporterConfig(BaseExporterConfig):
     """
     Configuration object for
     :py:class:`WebServerExporter <testplan.exporters.testing.webserver.WebServerExporter>`  # pylint: disable=line-too-long
@@ -47,7 +47,7 @@ class WebServerExporter(Exporter):
     :py:class:`~testplan.exporters.testing.base.Exporter` options.
     """
 
-    CONFIG = WebServerExporterConfig
+    CONFIG = WebServerBaseExporterConfig
 
     def __init__(self, name="Web Server exporter", **options):
         super(WebServerExporter, self).__init__(name=name, **options)

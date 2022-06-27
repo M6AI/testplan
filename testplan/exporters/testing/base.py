@@ -3,33 +3,35 @@
 Implements base exporter objects.
 """
 import os
-from typing import Dict, List, Optional
 from shutil import copyfile
+from typing import Dict, List, Optional
 
 from schema import Use
 
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import BaseExporter, ExporterConfig
+from testplan.common.exporters import BaseExporter, BaseExporterConfig
 from testplan.common.utils.logger import TESTPLAN_LOGGER
 from testplan.common.utils.path import makedirs
 from testplan.report.testing.base import TestReport
 from testplan.testing import tagging
 
 
-# TODO: what we mean here? This is just another dot on the inheritance graph.
+# TODO: clarify usecase
+# NOTE: below class is supposedly separating user facing from internal
+#            base class
 class Exporter(BaseExporter):
-    """TODO"""
+    """Empty"""
 
     pass
 
 
-class TagFilteredExporterConfig(ExporterConfig):
+class TagFilteredBaseExporterConfig(BaseExporterConfig):
     """
     Configuration object for :py:class:`~TagFilteredExporter`.
     """
 
     @classmethod
-    def get_options(cls):
+    def get_options(cls) -> Dict:
         return {
             ConfigOption("report_tags"): [Use(tagging.validate_tag_value)],
             ConfigOption("report_tags_all"): [Use(tagging.validate_tag_value)],
@@ -49,7 +51,7 @@ class TagFilteredExporter(Exporter):
     ALL: str = "all"
     ANY: str = "any"
 
-    CONFIG: TagFilteredExporterConfig = TagFilteredExporterConfig
+    CONFIG: TagFilteredBaseExporterConfig = TagFilteredBaseExporterConfig
     exporter_class: BaseExporter = None
 
     def get_params(self, tag_dict: Dict, filter_type: str) -> Dict:
@@ -72,8 +74,7 @@ class TagFilteredExporter(Exporter):
         :return: instance of `exporter_class`
         :raises AttributeError: if there is no exporter class set
         """
-        # TODO: shouldn't this be a TypeError for non-BaseExporter instance?
-        if not self.exporter_class:
+        if self.exporter_class is None:
             raise AttributeError("`exporter_class` not set.")
 
         # pylint: disable=not-callable
@@ -139,6 +140,7 @@ class TagFilteredExporter(Exporter):
         :param source: Testplan report
         :param tag_dicts: list of tag dictionaries, export is run for each item
         :param filter_type: all / any
+        :raises ValueError: if the filter is not `all` or `any`
         """
         if filter_type not in [self.ALL, self.ANY]:
             raise ValueError("Invalid filter type: {}".format(filter_type))

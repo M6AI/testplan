@@ -1,5 +1,6 @@
 """TODO."""
 import traceback
+from typing import Dict
 
 from testplan.common.config import Config, Configurable
 
@@ -25,21 +26,21 @@ class ExporterResult:
         return result
 
 
-class ExporterConfig(Config):
+class BaseExporterConfig(Config):
     """
     Configuration object for
     :py:class:`BaseExporter <testplan.common.exporters.BaseExporter>` object.
     """
 
     @classmethod
-    def get_options(cls):
+    def get_options(cls) -> Dict:
         return {"name": str}
 
 
 class BaseExporter(Configurable):
     """Base exporter class."""
 
-    CONFIG = ExporterConfig
+    CONFIG = BaseExporterConfig
 
     def __init__(self, name=None, **options):
         if name is None:
@@ -48,13 +49,18 @@ class BaseExporter(Configurable):
         super(BaseExporter, self).__init__()
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.cfg.name
 
     @property
-    def cfg(self):
+    def cfg(self) -> BaseExporterConfig:
         """Exporter configuration."""
         return self._cfg
 
-    def export(self, report):
+    def export(self, report) -> None:
+        """
+
+        :param report:
+        :return:
+        """
         raise NotImplementedError("Exporter must define export().")

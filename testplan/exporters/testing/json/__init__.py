@@ -7,17 +7,18 @@ import hashlib
 import json
 import os
 import pathlib
+from typing import Tuple, Dict, Optional
 
 from testplan import defaults
 from testplan.common.config import ConfigOption
-from testplan.common.exporters import ExporterConfig
+from testplan.common.exporters import BaseExporterConfig
 from testplan.report import ReportCategories
 from testplan.report.testing.base import TestReport
 from testplan.report.testing.schemas import TestReportSchema
 from ..base import Exporter, save_attachments
 
 
-def gen_attached_report_names(json_path):
+def gen_attached_report_names(json_path: str) -> Tuple[str, str]:
     """
     Generate file names of structure JSON report and assertions JSON report.
     """
@@ -32,7 +33,7 @@ def gen_attached_report_names(json_path):
     )
 
 
-class JSONExporterConfig(ExporterConfig):
+class JSONBaseExporterConfig(BaseExporterConfig):
     """
     Configuration object for
     :py:class:`JSONExporter <testplan.exporters.testing.json.JSONExporter>`
@@ -40,7 +41,7 @@ class JSONExporterConfig(ExporterConfig):
     """
 
     @classmethod
-    def get_options(cls):
+    def get_options(cls) -> Dict:
         return {
             ConfigOption("json_path"): str,
             # By default a single JSON file should be exported, with cfg option
@@ -63,12 +64,17 @@ class JSONExporter(Exporter):
     :py:class:`~testplan.exporters.testing.base.Exporter` options.
     """
 
-    CONFIG = JSONExporterConfig
+    CONFIG = JSONBaseExporterConfig
 
     def __init__(self, name="JSON exporter", **options):
         super(JSONExporter, self).__init__(name=name, **options)
 
-    def export(self, source: TestReport):
+    def export(self, source: TestReport) -> Optional[str]:
+        """
+
+        :param source:
+        :return:
+        """
 
         json_path = pathlib.Path(self.cfg.json_path).resolve()
 
@@ -130,7 +136,12 @@ class JSONExporter(Exporter):
 
     @staticmethod
     def split_json_report(data):
-        """Split a single Json into several parts."""
+        """
+        Split a single Json into several parts.
+
+        :param data:
+        :return:
+        """
 
         def split_assertions(entries, assertions):
             """Remove assertions from report and place them in a dictionary."""
