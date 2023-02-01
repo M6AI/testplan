@@ -35,20 +35,7 @@ const InteractiveNav = (props) => {
         url={props.url}
         uidEncoder = {base64url}
       />
-      <InteractiveNavList
-        width={props.navListWidth}
-        entries={navEntries}
-        breadcrumbLength={breadCrumbEntries.length}        
-        handleColumnResizing={props.handleColumnResizing}
-        filter={null}
-        displayEmpty={true}
-        displayTags={false}
-        displayTime={false}
-        selectedUid={GetSelectedUid(props.selected)}
-        handleClick={props.handleClick}
-        envCtrlCallback={props.envCtrlCallback}
-        url={props.url}
-      />
+      {renderNavigation(props)}
     </>
   );
 };
@@ -56,6 +43,48 @@ const InteractiveNav = (props) => {
 InteractiveNav.propTypes = {
   /** Testplan report */
   report: PropTypes.object,
+  /** Flag to display tree view or default view */
+  treeView: PropTypes.bool,
 };
+
+
+const renderNavigation = (props) => {
+
+  if (props.treeView) {
+    const navEntries = props.report ? props.report.entries : [];
+    return <TreeViewNav
+      width={props.navListWidth}
+      entries={navEntries}
+      breadcrumbLength={breadCrumbEntries.length}
+      handleColumnResizing={props.handleColumnResizing}
+      filter={props.filter}
+      displayEmpty={props.displayEmpty}
+      displayTags={props.displayTags}
+      displayTime={props.displayTime}
+      selected={props.selected}
+      selectedUid={GetSelectedUid(props.selected)}
+      url={props.url}
+    />;
+  }
+  
+  const navEntries = GetInteractiveNavEntries(props.selected);
+  const breadCrumbEntries = GetNavBreadcrumbs(props.selected);
+  return (
+    <InteractiveNavList
+      width={props.navListWidth}
+      entries={navEntries}
+      breadcrumbLength={breadCrumbEntries.length}        
+      handleColumnResizing={props.handleColumnResizing}
+      filter={null}
+      displayEmpty={true}
+      displayTags={false}
+      displayTime={false}
+      selectedUid={GetSelectedUid(props.selected)}
+      handleClick={props.handleClick}
+      envCtrlCallback={props.envCtrlCallback}
+      url={props.url}
+    />
+  );
+}
 
 export default InteractiveNav;
