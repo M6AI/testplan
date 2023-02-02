@@ -60,6 +60,7 @@ class InteractiveReport extends React.Component {
     this.updateGlobalExpand = this.updateGlobalExpand.bind(this);
     this.updateAssertionStatus = this.updateAssertionStatus.bind(this);
     this.resetAssertionStatus = this.resetAssertionStatus.bind(this);
+    this.updateTreeView = this.updateTreeView.bind(this);
     this.updateTimeDisplay = this.updateTimeDisplay.bind(this);
     this.updatePathDisplay = this.updatePathDisplay.bind(this);
 
@@ -74,6 +75,7 @@ class InteractiveReport extends React.Component {
       resetting: false,
       reloading: false,
       aborting: false,
+      treeView: false,
       displayTime: false,
       displayPath: false,
       assertionStatus: defaultAssertionStatus,
@@ -142,6 +144,16 @@ class InteractiveReport extends React.Component {
       });
       return { ...prev, assertionStatus };
     });
+  }
+
+  /**
+   * Update the flag for whether to use tree view navigation or the default one.
+   *
+   * @param {boolean} treeView.
+   * @public
+   */
+  updateTreeView(treeView) {
+    this.setState({ treeView: treeView });
   }
 
   /**
@@ -697,7 +709,7 @@ updateTimeDisplay(displayTime) {
           handleNavFilter={null}
           updateFilterFunc={noop}
           updateEmptyDisplayFunc={noop}
-          updateTreeViewFunc={noop}
+          updateTreeViewFunc={this.updateTreeView}
           updateTagsDisplayFunc={noop}
           updatePathDisplayFunc={this.updatePathDisplay}
           updateTimeDisplayFunc={this.updateTimeDisplay}
@@ -725,6 +737,7 @@ updateTimeDisplay(displayTime) {
           report={this.state.report}
           selected={selectedEntries}
           filter={null}
+          treeView={this.state.treeView}
           displayEmpty={true}
           displayTags={false}
           displayTime={false}          
